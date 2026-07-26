@@ -92,10 +92,17 @@ class GemmaService:
 
     def _prompt(self, camera_id: str, ocean: dict, weather: dict) -> str:
         schema = Assessment.model_json_schema()
+        environment_instruction = (
+            "Environmental measurements are intentionally unavailable for this external camera. "
+            "Do not infer or invent local buoy/weather conditions; keep environmental risk unknown."
+            if ocean.get("source") == "excluded" or weather.get("source") == "excluded"
+            else "Fuse the supplied environmental measurements with the local observations."
+        )
         return f"""Analyze this camera observation and fuse every supplied sensor source.
 Camera ID: {camera_id}
 Sensor fusion input:
 {json.dumps({'ocean_conditions': ocean, 'local_weather': weather}, default=str)}
+Environmental instruction: {environment_instruction}
 Available action tools (request them only when justified):
 {json.dumps(TOOL_SCHEMAS)}
 Return this assessment schema, including tool_calls with name and arguments when action is warranted:
@@ -122,6 +129,31 @@ The reasoning_summary must contain only a concise evidence-and-conclusion summar
             return json.dumps(parsed_response)
         return raw
 
+    @staticmethod
+    def _decode_video_frames(video_path: str, max_frames: int = 32):
+        """Decode roughly one RGB frame per second without torchvision/torchcodec."""
+        import av
+        import numpy as np
+
+        frames = []
+        next_sample_at = 0.0
+        with av.open(video_path) as container:
+            stream = next(iter(container.streams.video), None)
+            if stream is None:
+                raise ValueError("Video input has no decodable video stream")
+            fallback_fps = float(stream.average_rate or 1)
+            for index, frame in enumerate(container.decode(stream)):
+                timestamp = float(frame.time) if frame.time is not None else index / fallback_fps
+                if timestamp + 1e-6 < next_sample_at:
+                    continue
+                frames.append(frame.to_ndarray(format="rgb24"))
+                next_sample_at = timestamp + 1.0
+                if len(frames) >= max_frames:
+                    break
+        if not frames:
+            raise ValueError("Video input did not contain any decodable frames")
+        return np.stack(frames)
+
     def analyze(self, camera_id: str, video_path: str | None, audio_path: str | None, ocean: dict, weather: dict) -> Assessment:
         if not video_path and not audio_path:
             raise ValueError("At least one video or audio input is required")
@@ -129,7 +161,10 @@ The reasoning_summary must contain only a concise evidence-and-conclusion summar
             self.load()
             content = []
             if video_path:
-                content.append({"type": "video", "video": str(Path(video_path).resolve())})
+                content.append({
+                    "type": "video",
+                    "video": self._decode_video_frames(str(Path(video_path).resolve())),
+                })
             content.append({"type": "text", "text": self._prompt(camera_id, ocean, weather)})
             if audio_path:
                 content.append({"type": "audio", "audio": str(Path(audio_path).resolve())})
@@ -140,6 +175,12 @@ The reasoning_summary must contain only a concise evidence-and-conclusion summar
             inputs = self.processor.apply_chat_template(
                 messages, tokenize=True, return_dict=True, return_tensors="pt",
                 add_generation_prompt=True, enable_thinking=False,
+                processor_kwargs={
+                    "videos_kwargs": {
+                        "do_sample_frames": False,
+                        "fps": 1.0,
+                    }
+                },
             ).to(self.model.device)
             input_len = inputs["input_ids"].shape[-1]
             outputs = self.model.generate(**inputs, max_new_tokens=700, do_sample=False)

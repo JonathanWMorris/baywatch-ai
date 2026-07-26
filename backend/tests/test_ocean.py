@@ -7,10 +7,9 @@ SAMPLE = """#YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP DEWP V
 """
 
 def test_parse_ndbc_uses_latest_complete_wave_row():
-    result = parse_ndbc(SAMPLE, "46042")
+    result = parse_ndbc(SAMPLE, "41122")
     assert result["wave_height_ft"] == 5.6
     assert result["dominant_period_sec"] == 19
     assert result["wind_speed_mph"] == 20.1
     assert result["water_temp_f"] == 61.9
     assert result["is_mock"] is False
-

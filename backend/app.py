@@ -4,57 +4,119 @@ import json
 import logging
 import os
 import time
-import uuid
-from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, request, send_from_directory
-from werkzeug.utils import secure_filename
+from flask import Flask, Response, jsonify, request
 
-from backend.demo import get_scenarios
-from backend.services.audio import extract_audio_track
 from backend.services.gemma import gemma
+from backend.services.live import live_manager
 from backend.services.ocean import get_buoy_conditions
+from backend.services.risk import assess_ocean_risk
 from backend.services.weather import get_weather_conditions
 from backend.state import state
-from backend.tools.lifeguard_tools import execute_assessment_tools
 
 load_dotenv()
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-ROOT = Path(__file__).resolve().parents[1]
-ASSET_DIR = ROOT / "demo_assets"
 
 
 def create_app(testing: bool = False) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.update(TESTING=testing, MAX_CONTENT_LENGTH=250 * 1024 * 1024)
-    Path(app.instance_path, "uploads").mkdir(parents=True, exist_ok=True)
 
     @app.after_request
     def cors(response):
-        response.headers["Access-Control-Allow-Origin"] = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+        configured_origins = os.getenv("FRONTEND_ORIGINS")
+        if configured_origins is None:
+            configured_origins = os.getenv(
+                "FRONTEND_ORIGIN",
+                "http://localhost:5173,http://127.0.0.1:5173",
+            )
+        allowed_origins = {
+            origin.strip() for origin in configured_origins.split(",") if origin.strip()
+        }
+        # Existing installations used a singular local origin. Treat localhost
+        # and 127.0.0.1 as paired aliases without widening non-local origins.
+        if "http://localhost:5173" in allowed_origins:
+            allowed_origins.add("http://127.0.0.1:5173")
+        if "http://127.0.0.1:5173" in allowed_origins:
+            allowed_origins.add("http://localhost:5173")
+        request_origin = request.headers.get("Origin")
+        if request_origin in allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = request_origin
+            response.headers.add("Vary", "Origin")
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
         return response
 
     @app.get("/api/health")
     def health():
-        return jsonify({"status": "ok", "gemma": gemma.status()})
+        return jsonify({"status": "ok", "gemma": gemma.status(), "live": live_manager.status()})
 
     @app.get("/api/status")
     def status():
-        ocean = get_buoy_conditions(os.getenv("NDBC_STATION_ID", "46042"))
-        weather = get_weather_conditions(float(os.getenv("BEACH_LATITUDE", "36.9639")), float(os.getenv("BEACH_LONGITUDE", "-122.0179")))
-        return jsonify({**state.snapshot(), "ocean": ocean, "weather": weather, "gemma": gemma.status()})
+        ocean = get_buoy_conditions(os.getenv("NDBC_STATION_ID", "41122"))
+        weather = get_weather_conditions(
+            float(os.getenv("BEACH_LATITUDE", "26.31656")),
+            float(os.getenv("BEACH_LONGITUDE", "-80.0756")),
+        )
+        snapshot = state.snapshot()
+        assessment = snapshot["assessments"].get(live_manager.camera_id)
+        ocean_risk = assess_ocean_risk(ocean, weather, assessment)
+        snapshot["cameras"] = [
+            {
+                **camera,
+                "risk_level": (
+                    ocean_risk["risk_level"]
+                    if camera["id"] == live_manager.camera_id
+                    else camera["risk_level"]
+                ),
+            }
+            for camera in snapshot["cameras"]
+        ]
+        if ocean_risk["risk_level"] == "critical":
+            snapshot["global_status"] = "active_alert"
+        elif (
+            ocean_risk["risk_level"] in {"moderate", "high"}
+            and snapshot["global_status"] == "monitoring"
+        ):
+            snapshot["global_status"] = "elevated_conditions"
+        return jsonify({
+            **snapshot,
+            "ocean": ocean,
+            "weather": weather,
+            "ocean_risk_assessment": ocean_risk,
+            "gemma": gemma.status(),
+            "live": live_manager.status(),
+        })
+
+    @app.get("/api/live/status")
+    def live_status():
+        return jsonify(live_manager.status())
+
+    @app.post("/api/live/start")
+    def live_start():
+        dependencies = live_manager.preflight()
+        if not dependencies["ready"]:
+            return jsonify({
+                "error": live_manager.status()["error"],
+                "dependencies": dependencies,
+            }), 503
+        started = live_manager.start()
+        return jsonify({**live_manager.status(), "started": started})
+
+    @app.post("/api/live/stop")
+    def live_stop():
+        was_running = live_manager.stop()
+        return jsonify({**live_manager.status(), "was_running": was_running})
 
     @app.get("/api/environment/buoy")
     def buoy():
-        return jsonify(get_buoy_conditions(request.args.get("station_id", os.getenv("NDBC_STATION_ID", "46042"))))
+        return jsonify(get_buoy_conditions(request.args.get("station_id", os.getenv("NDBC_STATION_ID", "41122"))))
 
     @app.get("/api/environment/weather")
     def weather():
-        lat = float(request.args.get("latitude", os.getenv("BEACH_LATITUDE", "36.9639")))
-        lon = float(request.args.get("longitude", os.getenv("BEACH_LONGITUDE", "-122.0179")))
+        lat = float(request.args.get("latitude", os.getenv("BEACH_LATITUDE", "26.31656")))
+        lon = float(request.args.get("longitude", os.getenv("BEACH_LONGITUDE", "-80.0756")))
         return jsonify(get_weather_conditions(lat, lon))
 
     @app.get("/api/events")
@@ -68,38 +130,6 @@ def create_app(testing: bool = False) -> Flask:
                 yield f"event: status\ndata: {json.dumps(state.snapshot())}\n\n"
                 time.sleep(2)
         return Response(generate(), mimetype="text/event-stream", headers={"Cache-Control": "no-cache"})
-
-    def run_analysis(camera_id_override: str | None = None):
-        camera_id = camera_id_override or request.form.get("camera_id", "camera_1")
-        video, audio = request.files.get("video"), request.files.get("audio")
-        paths = {"video": None, "audio": None}
-        for kind, upload in (("video", video), ("audio", audio)):
-            if upload and upload.filename:
-                filename = f"{uuid.uuid4()}-{secure_filename(upload.filename)}"
-                path = Path(app.instance_path, "uploads", filename)
-                upload.save(path)
-                paths[kind] = str(path)
-        if not any(paths.values()):
-            return jsonify({"error": "Provide a video or audio file"}), 400
-        if paths["video"] and not paths["audio"]:
-            paths["audio"] = extract_audio_track(paths["video"], str(Path(app.instance_path, "uploads")))
-            if paths["audio"]:
-                state.publish("audio", "Embedded audio extracted for native Gemma analysis", camera_id=camera_id)
-        ocean_data = get_buoy_conditions(os.getenv("NDBC_STATION_ID", "46042"))
-        weather_data = get_weather_conditions(float(os.getenv("BEACH_LATITUDE", "36.9639")), float(os.getenv("BEACH_LONGITUDE", "-122.0179")))
-        state.publish("analysis", "Gemma multimodal analysis started", camera_id=camera_id)
-        assessment = gemma.analyze(camera_id, paths["video"], paths["audio"], ocean_data, weather_data)
-        state.apply_assessment(assessment)
-        tool_results = execute_assessment_tools(assessment, state)
-        return jsonify({"assessment": assessment.model_dump(), "tool_results": tool_results})
-
-    @app.post("/api/analyze")
-    def analyze():
-        return run_analysis()
-
-    @app.post("/api/cameras/<camera_id>/analyze")
-    def analyze_camera(camera_id: str):
-        return run_analysis(camera_id)
 
     @app.post("/api/alerts/<alert_id>/acknowledge")
     def acknowledge(alert_id: str):
@@ -124,28 +154,6 @@ def create_app(testing: bool = False) -> Flask:
         state.escalation = None
         return jsonify({"status": "simulated", "real_emergency_services_contacted": False})
 
-    @app.get("/api/demo/scenarios")
-    def scenarios():
-        return jsonify(get_scenarios(ASSET_DIR))
-
-    @app.post("/api/demo/scenarios/<scenario_id>/start")
-    def start_scenario(scenario_id: str):
-        scenario = next((item for item in get_scenarios(ASSET_DIR) if item["id"] == scenario_id), None)
-        if not scenario:
-            return jsonify({"error": "Scenario not found"}), 404
-        if not scenario["available"]:
-            return jsonify({"error": f"Add {scenario['media_file']} to demo_assets first"}), 409
-        for camera in state.cameras:
-            if camera["id"] == scenario["camera_id"]:
-                camera["media_url"] = scenario["media_url"]
-                camera["status"] = "analyzing"
-        state.publish("demo", f"Scenario started: {scenario['name']}", camera_id=scenario["camera_id"])
-        return jsonify(scenario)
-
-    @app.get("/demo-assets/<path:filename>")
-    def demo_asset(filename: str):
-        return send_from_directory(ASSET_DIR, filename)
-
     return app
 
 
@@ -154,7 +162,7 @@ app = create_app()
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
-        port=int(os.getenv("PORT", "8000")),
+        port=int(os.getenv("PORT", "8001")),
         debug=os.getenv("FLASK_DEBUG", "0") == "1",
         threaded=True,
     )

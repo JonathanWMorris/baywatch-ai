@@ -10,11 +10,11 @@ from backend.services.cache import TTLValue
 LOGGER = logging.getLogger(__name__)
 _cache = TTLValue(600)
 DEMO_WEATHER = {
-    "source": "OpenWeather", "temperature_f": 62.0, "feels_like_f": 61.0,
-    "wind_speed_mph": 14.0, "wind_gust_mph": 21.0, "wind_direction_deg": 280,
-    "visibility_m": 10000, "humidity_percent": 74, "pressure_hpa": 1016,
+    "source": "OpenWeather", "temperature_f": 84.0, "feels_like_f": 91.0,
+    "wind_speed_mph": 12.0, "wind_gust_mph": 18.0, "wind_direction_deg": 105,
+    "visibility_m": 10000, "humidity_percent": 76, "pressure_hpa": 1015,
     "condition": "partly cloudy", "alerts": [], "is_mock": True,
-    "status_message": "OpenWeather unavailable; displaying demo weather conditions.",
+    "status_message": "OpenWeather unavailable; displaying Deerfield Beach demo weather.",
 }
 
 
@@ -43,4 +43,3 @@ def get_weather_conditions(latitude: float, longitude: float, force: bool = Fals
             LOGGER.warning("OpenWeather fetch failed: %s", exc)
             return dict(DEMO_WEATHER)
     return load() if force else _cache.get_or_load(load)
-

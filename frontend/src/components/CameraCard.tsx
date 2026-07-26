@@ -1,30 +1,81 @@
-import {useRef, useState} from "react";
-import type {Assessment, Camera} from "../types";
+import type {Assessment, Camera, LiveStatus} from "../types";
 
-interface Props { camera: Camera; assessment?: Assessment; onAnalyze: (camera: Camera, video?: File, audio?: File) => Promise<void>; apiBase: string }
-
-export function CameraCard({camera, assessment, onAnalyze, apiBase}: Props) {
-  const [video, setVideo] = useState<File>();
-  const [audio, setAudio] = useState<File>();
-  const [preview, setPreview] = useState<string>();
-  const [busy, setBusy] = useState(false);
-  const picker = useRef<HTMLInputElement>(null);
-  const submit = async () => { if (!video && !audio) return picker.current?.click(); setBusy(true); try { await onAnalyze(camera, video, audio); } finally { setBusy(false); } };
-  const source = preview || (camera.media_url ? `${apiBase}${camera.media_url}` : undefined);
-  const latest = assessment?.events?.[0] ?? assessment?.audio_observations?.[0];
-  return <article className={`camera-card risk-${camera.risk_level}`}>
-    <div className="camera-head"><div><span className="eyebrow">{camera.id.replace("_", " ")}</span><h3>{camera.name}</h3></div><span className={`risk-pill ${camera.risk_level}`}>{camera.risk_level}</span></div>
-    <div className="video-shell">
-      {source ? <video src={source} controls muted loop autoPlay playsInline /> : <div className="empty-feed"><span>◉</span><strong>Feed ready</strong><small>Add a prerecorded beach clip</small></div>}
-      <span className="live-chip">● SIMULATED LIVE</span>
-    </div>
-    <p className="latest-event">{latest?.description ?? "No recent hazards detected"}</p>
-    <div className="camera-actions">
-      <input ref={picker} hidden type="file" accept="video/*" onChange={event => {const file=event.target.files?.[0]; setVideo(file); if(file) setPreview(URL.createObjectURL(file));}} />
-      <label className="file-action">Audio<input hidden type="file" accept="audio/*" onChange={event => setAudio(event.target.files?.[0])}/></label>
-      <button className="secondary" onClick={() => picker.current?.click()}>{video ? "Change clip" : "Add clip"}</button>
-      <button onClick={submit} disabled={busy}>{busy ? "Gemma analyzing…" : "Analyze"}</button>
-    </div>
-  </article>;
+interface Props {
+  camera: Camera;
+  assessment?: Assessment;
+  live: LiveStatus;
+  onLiveToggle: (enabled: boolean) => Promise<void>;
 }
 
+export function CameraCard({
+  camera,
+  assessment,
+  live,
+  onLiveToggle,
+}: Props) {
+  const latest =
+    assessment?.events?.[0] ?? assessment?.audio_observations?.[0];
+  const nextRun = live.next_analysis_at
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(live.next_analysis_at).getTime() - Date.now()) / 1000,
+        ),
+      )
+    : null;
+
+  return (
+    <article className={`camera-card live-camera risk-${camera.risk_level}`}>
+      <div className="camera-head">
+        <div>
+          <span className="eyebrow">YouTube live · Deerfield Beach Pier</span>
+          <h3>{camera.name}</h3>
+        </div>
+        <span className={`risk-pill ${camera.risk_level}`}>
+          {camera.risk_level} risk
+        </span>
+      </div>
+      <div className="video-shell">
+        <iframe
+          src={camera.embed_url}
+          title={camera.name}
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowFullScreen
+        />
+        <span className="live-chip">● LIVE</span>
+      </div>
+      <div className="camera-foot">
+        <div>
+          <p className="latest-event">
+            {latest?.description ??
+              "Awaiting the next Gemma video and audio assessment"}
+          </p>
+          <div className="live-meta">
+            <span className={`live-state ${live.phase}`}>
+              {live.phase.replace("_", " ")}
+            </span>
+            <span>Video + native audio + environment</span>
+            {nextRun !== null && <span>Next window in {nextRun}s</span>}
+          </div>
+          {live.error && <p className="camera-error">{live.error}</p>}
+        </div>
+        <div className="camera-actions">
+          <button
+            className={live.enabled ? "danger-button" : ""}
+            onClick={() => onLiveToggle(!live.enabled)}
+          >
+            {live.enabled ? "Stop analysis" : "Start live analysis"}
+          </button>
+          <a
+            className="external-link"
+            href={live.watch_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open YouTube ↗
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+}

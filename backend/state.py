@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import uuid
 from collections import deque
@@ -16,9 +17,19 @@ class AppState:
         self.warning: dict | None = None
         self.escalation: dict | None = None
         self.cameras = [
-            {"id": "camera_1", "name": "Main Beach", "status": "monitoring", "risk_level": "low", "media_url": None},
-            {"id": "camera_2", "name": "Tower 2", "status": "monitoring", "risk_level": "low", "media_url": None},
-            {"id": "camera_3", "name": "Rocky Point", "status": "monitoring", "risk_level": "moderate", "media_url": None},
+            {
+                "id": "camera_live",
+                "name": "Deerfield Beach Live",
+                "status": "live_ready",
+                "risk_level": "low",
+                "media_url": None,
+                "source_type": "youtube",
+                "embed_url": (
+                    "https://www.youtube.com/embed/"
+                    f"{os.getenv('LIVE_YOUTUBE_VIDEO_ID', 'rdeoEeJ00xA')}?autoplay=1&mute=1"
+                ),
+                "external": False,
+            },
         ]
         self.publish("system", "Baywatch AI monitoring initialized")
 
@@ -75,4 +86,3 @@ class AppState:
 
 
 state = AppState()
-

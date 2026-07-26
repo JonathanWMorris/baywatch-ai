@@ -12,11 +12,11 @@ NDBC_URL = "https://www.ndbc.noaa.gov/data/realtime2/{station_id}.txt"
 _cache = TTLValue(300)
 
 DEMO_OCEAN = {
-    "station_id": "46042", "source": "NOAA/NDBC", "wave_height_ft": 5.2,
-    "dominant_period_sec": 16.0, "average_period_sec": 7.2, "wave_direction_deg": 285,
-    "wind_speed_mph": 17.9, "wind_gust_mph": 24.6, "water_temp_f": 59.9,
-    "air_temp_f": 60.8, "pressure_hpa": 1017.4, "observation_time": None,
-    "is_mock": True, "status_message": "NOAA unavailable; displaying demo ocean conditions.",
+    "station_id": "41122", "source": "NOAA/NDBC", "wave_height_ft": 2.0,
+    "dominant_period_sec": 4.0, "average_period_sec": 2.8, "wave_direction_deg": 120,
+    "wind_speed_mph": None, "wind_gust_mph": None, "water_temp_f": 87.0,
+    "air_temp_f": 83.0, "pressure_hpa": None, "observation_time": None,
+    "is_mock": True, "status_message": "NOAA unavailable; displaying Deerfield Beach demo conditions.",
 }
 
 
@@ -60,7 +60,7 @@ def parse_ndbc(text: str, station_id: str) -> dict:
     raise ValueError("No usable NDBC observation found")
 
 
-def get_buoy_conditions(station_id: str = "46042", force: bool = False) -> dict:
+def get_buoy_conditions(station_id: str = "41122", force: bool = False) -> dict:
     def load():
         try:
             response = requests.get(NDBC_URL.format(station_id=station_id), timeout=5)
@@ -70,4 +70,3 @@ def get_buoy_conditions(station_id: str = "46042", force: bool = False) -> dict:
             LOGGER.warning("NDBC fetch failed: %s", exc)
             return {**DEMO_OCEAN, "station_id": station_id}
     return load() if force else _cache.get_or_load(load)
-
