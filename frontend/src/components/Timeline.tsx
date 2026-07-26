@@ -1,0 +1,3 @@
+import type {TimelineEvent} from "../types";
+export function Timeline({events}: {events: TimelineEvent[]}) { return <section className="panel timeline"><div className="panel-title"><div><span className="eyebrow">Gemma 4 E4B</span><h2>Live analysis</h2></div><span className="pulse"/></div><div className="timeline-list">{events.slice(0,12).map(event => <div className="timeline-item" key={event.id}><time>{new Date(event.timestamp).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"})}</time><span className={`event-dot ${event.category}`}/><div><strong>{event.category.replace("_", " ")}</strong><p>{event.message}</p></div></div>)}</div></section> }
+
