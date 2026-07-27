@@ -62,3 +62,20 @@ class TimelineEvent(BaseModel):
     severity: str | None = None
     details: dict = Field(default_factory=dict)
 
+
+class IoTDeviceTelemetry(BaseModel):
+    device_id: str
+    device_type: Literal["edge_vision_buoy", "wearable_submersion_tracker", "sonar_pod", "drone_scout"]
+    zone: str = "Zone 1 (Deerfield Pier)"
+    latitude: float = 26.31656
+    longitude: float = -80.07560
+    submersion_seconds: float = 0.0
+    heart_rate_bpm: int | None = None
+    battery_pct: int = 100
+    signal_rssi_dbm: int = -65
+    protocol: Literal["lorawan", "mqtt", "cellular_nbiot"] = "lorawan"
+    raw_payload_hex: str | None = None
+    alert_status: Literal["normal", "submerged_warning", "drowning_critical", "heartrate_distress"] = "normal"
+    timestamp: str = Field(default_factory=utc_now)
+
+
