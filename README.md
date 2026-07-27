@@ -1,4 +1,8 @@
-[▶️ Watch the Baywatch AI Demo](./Bay%20Watch%20AI.mov)
+
+
+https://github.com/user-attachments/assets/7540bb43-3f3c-4aa1-8ef0-b77cfa85ab1d
+
+
 
 # Baywatch AI
 
