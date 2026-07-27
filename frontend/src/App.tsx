@@ -2,7 +2,11 @@ import {useEffect, useMemo, useState} from "react";
 import {AlertCard} from "./components/AlertCard";
 import {CameraCard} from "./components/CameraCard";
 import {Conditions} from "./components/Conditions";
+import {HandWearablePanel} from "./components/HandWearablePanel";
+import {IoTPanel} from "./components/IoTPanel";
+import {ProductionSuitePanel} from "./components/ProductionSuitePanel";
 import {Timeline} from "./components/Timeline";
+import {WatchSimulator} from "./components/WatchSimulator";
 import {
   acknowledgeAlert,
   getStatus,
@@ -238,6 +242,11 @@ function App() {
           </div>
           <Timeline events={status.events} />
         </section>
+
+        <HandWearablePanel onRefreshParent={refresh} />
+        <IoTPanel onRefreshParent={refresh} />
+        <WatchSimulator onRefreshParent={refresh} />
+        <ProductionSuitePanel onRefreshParent={refresh} />
 
         <section className="safety-note">
           <strong>Human in the loop</strong>
