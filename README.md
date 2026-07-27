@@ -146,18 +146,6 @@ The escalation panel only simulates a 911 call. It is clearly labeled, requires
 a human click, and never contacts emergency services. Baywatch AI augments
 trained lifeguards rather than replacing them.
 
-## Judge Demo Flow
-
-1. Show the live Deerfield Beach stream and matched NOAA/OpenWeather panels.
-2. Start live analysis and point out the captured video plus native audio.
-3. Show the Ocean Risk factors and Gemma analysis timeline.
-4. When an attention event appears, show its evidence and tool call.
-5. Press **Whistle + announce** to demonstrate operator-controlled TTS.
-6. Show that emergency escalation remains simulated and human-confirmed.
-
-The system remains useful for the demo if weather credentials or an
-environmental service are unavailable because every fallback is visibly marked.
-
 ## Running Locally
 
 Requirements: Node 20+, Python 3.13, `ffmpeg`, approximately 20 GB of free disk
