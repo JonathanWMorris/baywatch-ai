@@ -1,9 +1,4 @@
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=05r-rRZtRaw">
-     <img src="https://www.youtube.com/watch?v=05r-rRZtRaw" alt="Watch the video" width="600">
-  </a>
-</p>
-
+[![Watch the video](https://www.youtube.com/watch?v=05r-rRZtRaw)](https://www.youtube.com/watch?v=05r-rRZtRaw)
 
 # Baywatch AI
 
