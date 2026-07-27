@@ -1,3 +1,10 @@
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=05r-rRZtRaw">
+     <img src="https://www.youtube.com/watch?v=05r-rRZtRaw" alt="Watch the video" width="600">
+  </a>
+</p>
+
+
 # Baywatch AI
 
 **A Gemma-powered second set of eyes and ears for lifeguards.**
