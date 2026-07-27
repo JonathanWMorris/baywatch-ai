@@ -1,4 +1,4 @@
-[▶️ Watch the Baywatch AI Demo]("./Bay Watch AI.mov")
+[▶️ Watch the Baywatch AI Demo](./Bay%20Watch%20AI.mov)
 
 # Baywatch AI
 
