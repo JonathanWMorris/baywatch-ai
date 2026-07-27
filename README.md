@@ -1,4 +1,4 @@
-[![Watch the video](https://www.youtube.com/watch?v=05r-rRZtRaw)](https://www.youtube.com/watch?v=05r-rRZtRaw)
+[▶️ Watch the Baywatch AI Demo]("./Bay Watch AI.mov")
 
 # Baywatch AI
 
